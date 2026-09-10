@@ -1,0 +1,53 @@
+import { writable, get, type Writable } from 'svelte/store';
+import type { Board, BoardConfig, Coord, RevealResult, RuleFlags } from '../lib/types';
+import type { Rng } from '../lib/rng';
+import { prepareRoom, placeMines } from '../lib/boardgen';
+import { reveal, chord, toggleFlag, emptyRevealResult } from '../lib/reveal';
+
+export interface BoardSession {
+  board: Board;
+  cfg: BoardConfig;
+  rng: Rng;
+}
+
+export const boardSession: Writable<BoardSession | null> = writable(null);
+
+export function loadRoom(seed: number, floorId: number, roomIndex: number, roomsThisFloor: number): void {
+  const { board, cfg, rng } = prepareRoom(seed, floorId, roomIndex, roomsThisFloor);
+  boardSession.set({ board, cfg, rng });
+}
+
+export function clearRoom(): void {
+  boardSession.set(null);
+}
+
+export function bump(): void {
+  boardSession.update((s) => s);
+}
+
+export function applyReveal(r: number, c: number, rules: RuleFlags): RevealResult {
+  const s = get(boardSession);
+  if (!s) return emptyRevealResult();
+  if (!s.board.minesPlaced) placeMines(s.board, s.cfg, { r, c }, s.rng);
+  const res = reveal(s.board, r, c, rules);
+  boardSession.update((x) => x);
+  return res;
+}
+
+export function applyChord(r: number, c: number, rules: RuleFlags): RevealResult {
+  const s = get(boardSession);
+  if (!s) return emptyRevealResult();
+  const res = chord(s.board, r, c, rules);
+  boardSession.update((x) => x);
+  return res;
+}
+
+export function applyFlag(r: number, c: number, rules: RuleFlags): boolean {
+  const s = get(boardSession);
+  if (!s) return false;
+  const flagged = toggleFlag(s.board, r, c, rules);
+  boardSession.update((x) => x);
+  return flagged;
+}
+
+export type { Coord };
