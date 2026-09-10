@@ -6,6 +6,8 @@
   import FloorIntro from './components/FloorIntro.svelte';
   import ClassSelect from './components/ClassSelect.svelte';
   import GameScreen from './components/GameScreen.svelte';
+  import StatsScreen from './components/StatsScreen.svelte';
+  import CodexScreen from './components/CodexScreen.svelte';
 
   const screen = $derived($ui.screen);
 </script>
@@ -20,6 +22,10 @@
   <FloorIntro />
 {:else if screen === 'game'}
   <GameScreen />
+{:else if screen === 'stats'}
+  <StatsScreen />
+{:else if screen === 'codex'}
+  <CodexScreen />
 {:else}
   <MainMenu />
 {/if}
