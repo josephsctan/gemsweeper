@@ -1,5 +1,25 @@
 <script lang="ts">
+  import { ui } from './stores/uiStore';
+  import MainMenu from './components/MainMenu.svelte';
+  import HowToPlay from './components/HowToPlay.svelte';
+  import PrologueCard from './components/PrologueCard.svelte';
+  import FloorIntro from './components/FloorIntro.svelte';
+  import ClassSelect from './components/ClassSelect.svelte';
   import GameScreen from './components/GameScreen.svelte';
+
+  const screen = $derived($ui.screen);
 </script>
 
-<GameScreen />
+{#if screen === 'how-to-play'}
+  <HowToPlay />
+{:else if screen === 'class-select'}
+  <ClassSelect />
+{:else if screen === 'prologue'}
+  <PrologueCard />
+{:else if screen === 'floor-intro'}
+  <FloorIntro />
+{:else if screen === 'game'}
+  <GameScreen />
+{:else}
+  <MainMenu />
+{/if}
