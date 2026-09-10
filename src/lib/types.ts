@@ -281,15 +281,3 @@ export interface RunSave {
   inventory: Item[];
   codexUnlocks: string[];
 }
-
-// ---------- item hook dispatch ----------
-export type HookName = EffectHook;
-
-export interface HookContext {
-  hook: HookName;
-  run: RunState;
-  board: Board | null;
-  rng: any;
-  combat?: CombatState;
-  now: number;
-}
