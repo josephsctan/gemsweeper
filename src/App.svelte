@@ -1,5 +1,7 @@
 <script lang="ts">
   import { ui } from './stores/uiStore';
+  import { hasRunSave } from './lib/storage';
+  import { continueSavedRun } from './stores/gameFlow';
   import MainMenu from './components/MainMenu.svelte';
   import HowToPlay from './components/HowToPlay.svelte';
   import PrologueCard from './components/PrologueCard.svelte';
@@ -27,5 +29,5 @@
 {:else if screen === 'codex'}
   <CodexScreen />
 {:else}
-  <MainMenu />
+  <MainMenu hasSave={hasRunSave()} oncontinue={() => continueSavedRun()} />
 {/if}
