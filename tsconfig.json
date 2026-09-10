@@ -1,0 +1,16 @@
+{
+  "extends": "@tsconfig/svelte/tsconfig.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "sourceMap": true,
+    "types": ["vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["src/**/*.d.ts", "src/**/*.ts", "src/**/*.svelte"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
