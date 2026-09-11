@@ -18,12 +18,16 @@
     if (!disabled) onreveal();
   }
 
+  // Scry's window is time-bounded: re-checked on every board bump (GameScreen's
+  // 500ms tickTimers keeps bumping while any scry is live), so the reveal fades.
+  const scryLive = $derived(!!tile.scryVisibleUntil && tile.scryVisibleUntil > Date.now());
+
   const face = $derived.by(() => {
     if (tile.hazard === 'rubble' && tile.rubbleStage === 1) return hazardGlyph('rubble');
     if (!tile.revealed) {
       if (tile.flagged) return tileGlyph('flag');
-      if (tile.numberPeeked || tile.scryVisibleUntil) {
-        return tile.scryVisibleUntil && tile.isMine
+      if (tile.numberPeeked || scryLive) {
+        return scryLive && tile.isMine
           ? tileGlyph('mine')
           : String(Math.max(0, tile.adjacent + tile.displayDelta) || '');
       }

@@ -27,7 +27,16 @@
 
   const run = $derived($runState);
   const rules = $derived(run ? deriveStats(run).rules : null);
-  const ab = $derived(abilityView());
+  // abilityView() reads its stores with one-shot get(), so Svelte sees no
+  // dependencies. Touch them here so the button actually tracks focus, the
+  // once-per-room flag, combat, targeting, and board seeding.
+  const ab = $derived.by(() => {
+    void $runState;
+    void $phase;
+    void $targeting;
+    void $boardSession;
+    return abilityView();
+  });
 
   let timer: ReturnType<typeof setInterval>;
   let shaking = $state(false);

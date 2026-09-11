@@ -12,6 +12,15 @@ export interface BoardSession {
 
 export const boardSession: Writable<BoardSession | null> = writable(null);
 
+/**
+ * Called once per room, right after the first reveal seeds mines/hazards.
+ * gameFlow registers itself here (boardStore must not import gameFlow).
+ */
+let minesPlacedHook: ((first: Coord) => void) | null = null;
+export function setMinesPlacedHook(fn: ((first: Coord) => void) | null): void {
+  minesPlacedHook = fn;
+}
+
 export function loadRoom(seed: number, floorId: number, roomIndex: number, roomsThisFloor: number): void {
   const { board, cfg, rng } = prepareRoom(seed, floorId, roomIndex, roomsThisFloor);
   boardSession.set({ board, cfg, rng });
@@ -28,7 +37,10 @@ export function bump(): void {
 export function applyReveal(r: number, c: number, rules: RuleFlags): RevealResult {
   const s = get(boardSession);
   if (!s) return emptyRevealResult();
-  if (!s.board.minesPlaced) placeMines(s.board, s.cfg, { r, c }, s.rng);
+  if (!s.board.minesPlaced) {
+    placeMines(s.board, s.cfg, { r, c }, s.rng);
+    minesPlacedHook?.({ r, c });
+  }
   const res = reveal(s.board, r, c, rules);
   boardSession.update((x) => x);
   return res;

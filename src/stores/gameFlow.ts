@@ -1,6 +1,6 @@
 import { writable, get, type Writable } from 'svelte/store';
-import type { ClassId, Coord, ItemDef, Item } from '../lib/types';
-import { boardSession, loadRoom, clearRoom, bump } from './boardStore';
+import type { Board, ClassId, Coord, ItemDef, Item, RunState } from '../lib/types';
+import { boardSession, loadRoom, clearRoom, bump, setMinesPlacedHook } from './boardStore';
 import { runState, checkpointStore, setRun, patchRun } from './runStore';
 import { beginCombat, endCombat, type CombatSession } from './combatStore';
 import { persistMeta, reloadMeta } from './metaStore';
@@ -16,9 +16,10 @@ import {
 } from '../lib/run';
 import { deriveStats } from '../lib/stats';
 import { monsterForTile, roundLimitFor } from '../lib/combat';
-import { isRoomClear, recoverEmbers, spreadWater } from '../lib/reveal';
+import { armEmbers, isRoomClear, recoverEmbers, reveal, spreadWater } from '../lib/reveal';
 import {
   makeItem, rollRewards, onRoomClearHeal, postCombatHpCost,
+  onRoomStartRevealCount, onSafeRevealFocus,
 } from '../lib/items';
 import { addToInventory, resolvePickupAtCap } from '../lib/inventory';
 import { abilityCost, canUseAbility, useProbe, useScry } from '../lib/abilities';
@@ -39,6 +40,7 @@ export const SKIP_HEAL_HP = 3;
 
 let mineQueue: Coord[] = [];
 let firstCacheDoneThisFloor = false;
+let roomStartApplied = false;
 
 // ---- helpers ----
 function run() { return get(runState)!; }
@@ -50,6 +52,18 @@ function rewardRng() {
 function combatRngFor(c: Coord) {
   const r = run();
   return createRng(r.seed).fork(70000 + r.floor * 1000 + r.roomIndex * 100 + c.r * 14 + c.c);
+}
+/** Cartographer's Eye free room-start reveals. */
+function roomStartRevealRng(r: RunState) {
+  return createRng(r.seed).fork(50000 + r.floor * 100 + r.roomIndex);
+}
+/** Seer's Thread per-safe-reveal focus roll (varies with the running reveal count). */
+function safeRevealRng(r: RunState) {
+  return createRng(r.seed).fork(90000 + r.floor * 1000 + r.roomIndex * 100 + r.safeRevealsThisRoom);
+}
+/** `numbersSometimesLie` display deltas (Cursed Aegis) on non-cursed floors. */
+function numberLieRng(r: RunState) {
+  return createRng(r.seed).fork(80000 + r.floor * 100 + r.roomIndex);
 }
 function buildCtx() {
   const r = run();
@@ -65,8 +79,71 @@ function beginRoom() {
   const r = run();
   loadRoom(r.seed, r.floor, r.roomIndex, r.roomsThisFloor);
   mineQueue = [];
+  roomStartApplied = false;
   phase.set('playing');
 }
+
+// ---- room-start effects (run once, the moment the first reveal seeds the board) ----
+/** Fraction of eligible tiles that get a `numbersSometimesLie` display delta. */
+export const NUMBER_LIE_RATIO = 0.15;
+
+/** Cursed Aegis: scatter +/-1 display lies over plain tiles, like the floor-4 cursed hazard. */
+function applyNumberLies(r: RunState, b: Board): void {
+  if (!deriveStats(r).rules.numbersSometimesLie) return;
+  if (b.hazard === 'cursed') return; // floor 4 already lies via its own hazard
+  const eligible = b.tiles.flat().filter(
+    (t) => !t.isMine && t.hazard === 'none' && t.displayDelta === 0,
+  );
+  const count = Math.floor(eligible.length * NUMBER_LIE_RATIO);
+  if (count <= 0) return;
+  const rng = numberLieRng(r);
+  for (const t of rng.shuffle(eligible).slice(0, count)) {
+    let delta: -1 | 1 = rng.chance(0.5) ? -1 : 1;
+    if (t.adjacent + delta < 0) delta = 1; // same clamp as boardgen's cursed hazard
+    t.displayDelta = delta;
+  }
+}
+
+/** Cartographer's Eye: open N free safe tiles once the board is seeded. */
+function applyRoomStartReveals(r: RunState, b: Board, first: Coord): void {
+  const n = onRoomStartRevealCount(r);
+  if (n <= 0) return;
+  const rules = deriveStats(r).rules;
+  const rng = roomStartRevealRng(r);
+  const opened: Coord[] = [];
+  const caches: Coord[] = [];
+  for (let i = 0; i < n; i++) {
+    const pool = b.tiles.flat().filter(
+      (t) => !t.isMine && !t.revealed && !t.flagged && t.hazard !== 'rubble'
+        && !(t.r === first.r && t.c === first.c),
+    );
+    if (pool.length === 0) break;
+    const pickTile = rng.pick(pool);
+    const res = reveal(b, pickTile.r, pickTile.c, rules);
+    opened.push(...res.revealed);
+    caches.push(...res.caches);
+  }
+  if (opened.length === 0) return;
+  armEmbers(b, opened, Date.now(), getFloor(r.floor).emberRecoverMs, rules);
+  noteReveals(opened.length);
+  if (caches.length) handleCaches(caches);
+}
+
+/**
+ * Runs once per room, immediately after `placeMines` seeds the board on the
+ * first reveal (hazards/adjacency only exist from that moment on).
+ */
+export function afterFirstPlacement(first: Coord): void {
+  const r = get(runState);
+  const s = get(boardSession);
+  if (!r || !s || !s.board.minesPlaced || roomStartApplied) return;
+  roomStartApplied = true;
+  applyNumberLies(r, s.board);
+  applyRoomStartReveals(r, s.board, first);
+  bump();
+}
+
+setMinesPlacedHook(afterFirstPlacement);
 
 // ---- lifecycle ----
 export function startRunWithSeed(seed: number, classId: ClassId): void {
@@ -118,6 +195,8 @@ export function noteReveals(count: number): void {
   const r = run();
   const cap = deriveStats(r).focusCap;
   noteSafeReveals(r, count, cap);
+  const gained = onSafeRevealFocus(r, safeRevealRng(r)); // Seer's Thread
+  if (gained > 0) r.focus = Math.min(cap, r.focus + gained);
   patchRun(() => {});
 }
 
@@ -241,7 +320,10 @@ export function resolvePickup(dropId: string): void {
   pendingPickup.set(null);
   closeModal();
   patchRun(() => {});
-  finishRoom();
+  // Only the reward-flow pickup advances the room. A cache-triggered pickup
+  // happens mid-room (phase === 'playing'); the board is still live there and
+  // the normal reveal / handleBoardClear path finishes the room later.
+  if (get(phase) === 'reward') finishRoom();
 }
 
 function finishRoom() {
@@ -274,12 +356,18 @@ export function abilityView(): { label: string; enabled: boolean } {
   const inCombat = get(phase) === 'combat';
   const label = `${ab.name} (${abilityCost(r, d)})`;
   if (inCombat) return { label, enabled: false }; // in-combat ability is driven from CombatModal
-  return { label, enabled: canUseAbility(r, d, false).ok && get(targeting) === null };
+  const s = get(boardSession);
+  const boardReady = !!s && s.board.minesPlaced;
+  return { label, enabled: boardReady && canUseAbility(r, d, false).ok && get(targeting) === null };
 }
 
 export function beginTargeting(kind: 'probe' | 'scry'): void {
   const r = get(runState);
   if (!r) return;
+  const s = get(boardSession);
+  // Mines are placed lazily on the first reveal; before that every tile reads
+  // isMine:false / adjacent:0, so an ability would trivially flood the room.
+  if (!s || !s.board.minesPlaced) return;
   if (!canUseAbility(r, deriveStats(r), false).ok) return;
   targeting.set(kind);
 }
