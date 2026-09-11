@@ -13,6 +13,20 @@ export interface BoardSession {
 export const boardSession: Writable<BoardSession | null> = writable(null);
 
 /**
+ * reveal()/chord()/toggleFlag()/etc. mutate TileState objects in place (by
+ * design — see lib/reveal.ts). Svelte 5's per-component prop reactivity
+ * checks reference identity, so re-publishing the same board/tiles/tile
+ * object references after a mutation is invisible to <Tile> — the board
+ * would look permanently unrevealed no matter how many tiles get clicked.
+ * Cloning here, at the single point that talks to the store, gives every
+ * consumer fresh references without requiring the pure lib layer (which
+ * must stay Svelte-free) to know anything about Svelte's reactivity model.
+ */
+function cloneBoard(board: Board): Board {
+  return { ...board, tiles: board.tiles.map((row) => row.map((t) => ({ ...t }))) };
+}
+
+/**
  * Called once per room, right after the first reveal seeds mines/hazards.
  * gameFlow registers itself here (boardStore must not import gameFlow).
  */
@@ -31,7 +45,7 @@ export function clearRoom(): void {
 }
 
 export function bump(): void {
-  boardSession.update((s) => s);
+  boardSession.update((s) => (s ? { ...s, board: cloneBoard(s.board) } : s));
 }
 
 export function applyReveal(r: number, c: number, rules: RuleFlags): RevealResult {
@@ -42,7 +56,7 @@ export function applyReveal(r: number, c: number, rules: RuleFlags): RevealResul
     minesPlacedHook?.({ r, c });
   }
   const res = reveal(s.board, r, c, rules);
-  boardSession.update((x) => x);
+  boardSession.set({ ...s, board: cloneBoard(s.board) });
   return res;
 }
 
@@ -50,7 +64,7 @@ export function applyChord(r: number, c: number, rules: RuleFlags): RevealResult
   const s = get(boardSession);
   if (!s) return emptyRevealResult();
   const res = chord(s.board, r, c, rules);
-  boardSession.update((x) => x);
+  boardSession.set({ ...s, board: cloneBoard(s.board) });
   return res;
 }
 
@@ -58,7 +72,7 @@ export function applyFlag(r: number, c: number, rules: RuleFlags): boolean {
   const s = get(boardSession);
   if (!s) return false;
   const flagged = toggleFlag(s.board, r, c, rules);
-  boardSession.update((x) => x);
+  boardSession.set({ ...s, board: cloneBoard(s.board) });
   return flagged;
 }
 
