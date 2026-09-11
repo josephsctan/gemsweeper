@@ -76,9 +76,6 @@
   {#if $ui.modal === 'inventory'}
     <InventoryPanel open onclose={() => closeModal()} />
   {/if}
-  {#if $ui.modal === 'drop-choice' && $pendingPickup}
-    <DropChoiceModal incoming={$pendingPickup} onresolve={(id) => resolvePickup(id)} />
-  {/if}
 {:else if $phase === 'reward'}
   <RewardScreen offers={$rewardOffers} onpick={(d) => pickReward(d)} onskip={() => skipReward()} />
 {:else if $phase === 'floor-cleared' && run}
@@ -89,6 +86,10 @@
   <WinScreen oncontinue={() => toWonSummary()} />
 {:else if $phase === 'summary' && run}
   <RunSummary run={run} outcome={$lastOutcome} onmenu={() => toMenu()} />
+{/if}
+
+{#if $ui.modal === 'drop-choice' && $pendingPickup}
+  <DropChoiceModal incoming={$pendingPickup} onresolve={(id) => resolvePickup(id)} />
 {/if}
 
 <style>
