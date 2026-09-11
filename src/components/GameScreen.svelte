@@ -7,6 +7,7 @@
   import { getFloor } from '../content/floors';
   import { getClass } from '../content/classes';
   import { armEmbers, isRoomClear } from '../lib/reveal';
+  import { sfx } from '../lib/sfx';
   import {
     phase, rewardOffers, pendingPickup, targeting, lastOutcome,
     startNewRun, handleCaches, handleMines, resolveCombat, handleBoardClear,
@@ -29,6 +30,8 @@
   const ab = $derived(abilityView());
 
   let timer: ReturnType<typeof setInterval>;
+  let shaking = $state(false);
+  let shakeTimer: ReturnType<typeof setTimeout>;
   onMount(() => {
     if ($phase === 'loading') {
       const cls = $ui.selectedClass;
@@ -37,7 +40,10 @@
     }
     timer = setInterval(tickTimers, 500);
   });
-  onDestroy(() => clearInterval(timer));
+  onDestroy(() => {
+    clearInterval(timer);
+    clearTimeout(shakeTimer);
+  });
 
   function onReveal(kind: 'reveal' | 'chord', r: number, c: number) {
     if (!rules || !run) return;
@@ -45,8 +51,18 @@
     armEmbers($boardSession!.board, res.revealed, Date.now(), getFloor(run.floor).emberRecoverMs, rules);
     if (res.revealed.length) noteReveals(res.revealed.length);
     if (res.caches.length) handleCaches(res.caches);
-    if (res.mines.length) handleMines(res.mines);
-    else if (isRoomClear($boardSession!.board)) handleBoardClear();
+    if (res.mines.length) {
+      sfx.play('mine');
+      shaking = true;
+      clearTimeout(shakeTimer);
+      shakeTimer = setTimeout(() => { shaking = false; }, 200);
+      handleMines(res.mines);
+    } else if (isRoomClear($boardSession!.board)) {
+      sfx.play('clear');
+      handleBoardClear();
+    } else if (res.revealed.length) {
+      sfx.play('reveal');
+    }
   }
 </script>
 
@@ -60,7 +76,7 @@
     />
   {/if}
 
-  <div class="stage" class:targeting={$targeting !== null}>
+  <div class="stage" class:targeting={$targeting !== null} class:shake={shaking}>
     <Board
       rules={rules ?? undefined}
       disabled={$phase === 'combat'}

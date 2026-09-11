@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TileState } from '../lib/types';
+  import { hazardGlyph, tileGlyph } from '../lib/icons';
 
   let { tile, disabled, onreveal, onflag }: {
     tile: TileState;
@@ -18,17 +19,17 @@
   }
 
   const face = $derived.by(() => {
-    if (tile.hazard === 'rubble' && tile.rubbleStage === 1) return '▦';
+    if (tile.hazard === 'rubble' && tile.rubbleStage === 1) return hazardGlyph('rubble');
     if (!tile.revealed) {
-      if (tile.flagged) return '⚑';
+      if (tile.flagged) return tileGlyph('flag');
       if (tile.numberPeeked || tile.scryVisibleUntil) {
         return tile.scryVisibleUntil && tile.isMine
-          ? '◆'
+          ? tileGlyph('mine')
           : String(Math.max(0, tile.adjacent + tile.displayDelta) || '');
       }
       return '';
     }
-    if (tile.isMine) return tile.defused ? '☠' : '◆';
+    if (tile.isMine) return tile.defused ? tileGlyph('defused') : tileGlyph('mine');
     const shown = Math.max(0, tile.adjacent + tile.displayDelta);
     return shown === 0 ? '' : String(shown);
   });
@@ -42,6 +43,7 @@
   class:flag={tile.flagged}
   class:mine={tile.revealed && tile.isMine}
   class:watered={tile.watered}
+  class:just-revealed={tile.revealed}
   {disabled}
   onclick={click}
   oncontextmenu={contextmenu}
@@ -61,4 +63,9 @@
   .tile.mine { background: var(--danger); }
   .tile.watered { box-shadow: inset 0 0 0 2px #2f6f9f; }
   .tile:disabled { cursor: not-allowed; }
+  .tile.just-revealed { animation: flip 140ms ease-out; }
+  @keyframes flip {
+    from { transform: rotateX(90deg); }
+    to { transform: rotateX(0); }
+  }
 </style>
