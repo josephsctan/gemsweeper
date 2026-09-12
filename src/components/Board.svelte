@@ -58,9 +58,10 @@
 <style>
   .board {
     display: grid;
-    gap: 1px;
+    gap: 2px;
     background: #0c0c12;
-    padding: 1px;
+    padding: 6px;
+    border-radius: 8px;
     width: max-content;
     margin: 0 auto;
     user-select: none;

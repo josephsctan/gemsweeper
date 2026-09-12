@@ -7,7 +7,19 @@
   --danger: #b4432e;
   --safe: #3d7a5a;
   --tile: #2a2a36;
+  --tile-alt: #2f2f3c;
   --tile-covered: #34343f;
+  --tile-covered-alt: #3a3a48;
+  --flag: #e5534b;
+  /* Classic Minesweeper number color-coding, tuned for a dark tile. */
+  --num-1: #5b9bd5;
+  --num-2: #4caf82;
+  --num-3: #e5534b;
+  --num-4: #b48ce0;
+  --num-5: #c9784a;
+  --num-6: #4ec9c0;
+  --num-7: var(--ink);
+  --num-8: var(--muted);
   --space: 8px;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: dark;

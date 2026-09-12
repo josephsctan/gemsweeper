@@ -8,6 +8,9 @@ export interface BoardSession {
   board: Board;
   cfg: BoardConfig;
   rng: Rng;
+  /** epoch ms of the first reveal in this room (mine placement), like the
+   *  classic Minesweeper timer starting on first click; null before that. */
+  roomStartedAtMs: number | null;
 }
 
 export const boardSession: Writable<BoardSession | null> = writable(null);
@@ -37,7 +40,7 @@ export function setMinesPlacedHook(fn: ((first: Coord) => void) | null): void {
 
 export function loadRoom(seed: number, floorId: number, roomIndex: number, roomsThisFloor: number): void {
   const { board, cfg, rng } = prepareRoom(seed, floorId, roomIndex, roomsThisFloor);
-  boardSession.set({ board, cfg, rng });
+  boardSession.set({ board, cfg, rng, roomStartedAtMs: null });
 }
 
 export function clearRoom(): void {
@@ -51,12 +54,14 @@ export function bump(): void {
 export function applyReveal(r: number, c: number, rules: RuleFlags): RevealResult {
   const s = get(boardSession);
   if (!s) return emptyRevealResult();
+  let roomStartedAtMs = s.roomStartedAtMs;
   if (!s.board.minesPlaced) {
     placeMines(s.board, s.cfg, { r, c }, s.rng);
     minesPlacedHook?.({ r, c });
+    roomStartedAtMs = Date.now();
   }
   const res = reveal(s.board, r, c, rules);
-  boardSession.set({ ...s, board: cloneBoard(s.board) });
+  boardSession.set({ ...s, board: cloneBoard(s.board), roomStartedAtMs });
   return res;
 }
 
